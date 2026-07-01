@@ -1,0 +1,316 @@
+---
+
+# Apply rules from: https://messervices.cyber.gouv.fr/documents-guides/fr_np_linux_configuration-v2.0.pdf
+
+# "E" level protection ARE NOT APPLYED : R4, R6, R15 to R27, R46, R47, R48, R49, R66, R76, R77
+# R28 has be done during system installation
+# R1, R2, R3, R5 should be done on BIOS
+# NOT AUTOMABLE: R30, R33, R34, R35, R38, R39, R40, R41, R42, R43, R44, R50, R52, R53, R54, R55, R56, R57, R58, R59, R60, R62, R63, R64, R65
+#                 R68, R69, R70, R74, R75, R78, R79, R80
+
+# TODO: R37, R45, R71, R72
+
+# === 5 - CONFIGURATION DU NOYAU LINUX ============================================================
+
+# R7, R8
+- name: Update grub configuration
+  become: true
+  ansible.builtin.copy:
+    src: grub/grub.cfg
+    dest: /etc/default/grub.d/grub.cfg
+    mode: '644'
+  notify: Update grub
+
+- name: Set base modules
+  become: true
+  ansible.builtin.copy:
+    src: modules/base.conf
+    dest: /etc/modules-load.d/base.conf
+    mode: '644'
+  notify: Update initramfs
+
+- name: Set needed modules for Docker
+  become: true
+  ansible.builtin.copy:
+    src: modules/docker.conf
+    dest: /etc/modules-load.d/docker.conf
+    mode: '644'
+  when: anssi_debian_hardenings_docker_modules
+  notify: Update initramfs
+
+# R9, R10, R11
+- name: Set kernel security configurations
+  become: true
+  ansible.builtin.template:
+    src: kernel.conf.j2
+    dest: /etc/sysctl.d/kernel.conf
+    mode: '600'
+
+# R12, R13
+- name: Set network security configurations
+  become: true
+  ansible.builtin.template:
+    src: network.conf.j2
+    dest: /etc/sysctl.d/network.conf
+    mode: '600'
+
+# R14
+- name: Set file system security configurations
+  become: true
+  ansible.builtin.copy:
+    src: system/fs.conf
+    dest: /etc/sysctl.d/fs.conf
+    mode: '600'
+
+# === 6 - CONFIGURATION SYSTEM ====================================================================
+
+# R28
+
+- name: Change default mode of /boot
+  become: true
+  ansible.builtin.file:
+    path: /boot
+    mode: '700'
+
+- name: Change option for /boot/efi partition
+  become: true
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^(\S+\s+/boot/efi\s+\S+\s+)\S+(\s+\d+\s+\d+)'
+    replace: '\1nosuid,nodev,noexec,noauto\2'
+  when: anssi_debian_hardenings_uefi
+
+# R29
+- name: Change option for /boot partition
+  become: true
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^(\S+\s+/boot\s+\S+\s+)\S+(\s+\d+\s+\d+)'
+    replace: '\1nosuid,nodev,noexec,noauto\2'
+
+- name: Change option for /opt partition
+  become: true
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^(\S+\s+/opt\s+\S+\s+)\S+(\s+\d+\s+\d+)'
+    replace: '\1nosuid,nodev\2'
+
+- name: Change option for /srv partition
+  become: true
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^(\S+\s+/srv\s+\S+\s+)\S+(\s+\d+\s+\d+)'
+    replace: '\1nosuid,nodev\2'
+
+- name: Change option for /home partition
+  become: true
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^(\S+\s+/home\s+\S+\s+)\S+(\s+\d+\s+\d+)'
+    replace: '\1nosuid,nodev,noexec\2'
+
+- name: Change option for /usr partition
+  become: true
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^(\S+\s+/usr\s+\S+\s+)\S+(\s+\d+\s+\d+)'
+    replace: '\1nodev\2'
+
+- name: Change option for /var partition
+  become: true
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^(\S+\s+/var\s+\S+\s+)\S+(\s+\d+\s+\d+)'
+    replace: '\1nosuid,nodev,noexec\2'
+  when: anssi_debian_hardenings_var_partition_noexec
+
+- name: Change option for /var partition
+  become: true
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^(\S+\s+/var\s+\S+\s+)\S+(\s+\d+\s+\d+)'
+    replace: '\1nosuid,nodev\2'
+  when: not anssi_debian_hardenings_var_partition_noexec
+
+- name: Change option for /var/log partition
+  become: true
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^(\S+\s+/var/log\s+\S+\s+)\S+(\s+\d+\s+\d+)'
+    replace: '\1nosuid,nodev,noexec\2'
+
+- name: Change option for /var/tmp partition
+  become: true
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^(\S+\s+/var/tmp\s+\S+\s+)\S+(\s+\d+\s+\d+)'
+    replace: '\1nosuid,nodev,noexec\2'
+
+# ==> PAM
+
+# R31 -> Force strong password with PAM
+
+- name: Install libpam-pwquality
+  become: true
+  ansible.builtin.apt:
+    name: libpam-pwquality
+    state: present
+
+- name: Set common-password
+  become: true
+  ansible.builtin.copy:
+    src: pam/common-password
+    dest: /etc/pam.d/common-password
+    mode: '644'
+
+- name: Set pwquality.conf
+  become: true
+  ansible.builtin.copy:
+    src: security/pwquality.conf
+    dest: /etc/security/pwquality.conf
+    mode: '644'
+
+# ==> Set session expires after 5 minutes
+
+# R32
+
+- name: Set varenv TMOUT to 300s
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/profile
+    line: "export TMOUT=3000"
+    state: present
+    insertafter: EOF
+
+- name: Set varenv TMOUT as readonly
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/profile
+    line: "readonly TMOUT"
+    state: present
+    insertafter: EOF
+
+- name: Set ClientAliveInterval to 200
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "(#)?ClientAliveInterval [1-9]*"
+    line: "ClientAliveInterval 200"
+
+- name: Set ClientAliveCountMax to 3
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "(#)?ClientAliveCountMax [1-9]*"
+    line: "ClientAliveCountMax 3"
+
+# ==> umask to 0077
+
+# R36
+
+- name: Change default umask of system
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/profile
+    line: "umask 0077"
+    insertafter: EOF
+
+# ==> Setup automated updates
+
+# R61
+
+- name: Install unattended-upgrades
+  become: true
+  ansible.builtin.apt:
+    name: unattended-upgrades
+    state: present
+  when: anssi_debian_hardenings_auto_upgrade_enabled
+
+- name: Set automatic reboot
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/apt/apt.conf.d/50unattended-upgrades
+    regexp: "^(// )?Unattended-Upgrade::Automatic-Reboot \"(true|false)\";$"
+    value: "Unattended-Upgrade::Automatic-Reboot \"true\";"
+  when: anssi_debian_hardenings_auto_upgrade_enabled
+
+- name: Set hour of automatic reboot
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/apt/apt.conf.d/50unattended-upgrades
+    regexp: "^(// )?Unattended-Upgrade::Automatic-Reboot-Time \"[0-9][0-9]:[0-9][0-9]\";$"
+    value: "Unattended-Upgrade::Automatic-Reboot-Time \"03:30\";"
+  when: anssi_debian_hardenings_auto_upgrade_enabled
+
+- name: Enable unattended-upgrades
+  become: true
+  ansible.builtin.copy:
+    remote_src: true
+    src: /usr/share/unattended-upgrades/20auto-upgrades
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    mode: '0600'
+  when: anssi_debian_hardenings_auto_upgrade_enabled
+
+# === 7 - CONFIGURATION DES SERVICES ==============================================================
+
+# ==> PAM
+
+# R67
+
+- name: Install cracklib-runtime
+  become: true
+  ansible.builtin.apt:
+    name: cracklib-runtime
+    state: present
+
+- name: Set common-account
+  become: true
+  ansible.builtin.copy:
+    src: pam/common-account
+    dest: /etc/pam.d/common-account
+    mode: '644'
+
+- name: Set common-auth
+  become: true
+  ansible.builtin.copy:
+    src: pam/common-auth
+    dest: /etc/pam.d/common-auth
+    mode: '644'
+
+
+- name: Set faillock.conf
+  become: true
+  ansible.builtin.copy:
+    src: security/faillock.conf
+    dest: /etc/security/faillock.conf
+    mode: '644'
+
+# ==> Log user actions
+
+# R73
+
+- name: Install auditd
+  become: true
+  ansible.builtin.apt:
+    name: auditd
+    state: present
+
+- name: Add rules file for auditd
+  become: true
+  ansible.builtin.template:
+    src: audit.rules.j2
+    dest: /etc/audit/rules.d/audit.rules
+    mode: '0600'
+  notify: Restart auditd
+
+# =================================================================================================
+
+# R5, R51
+- name: Ask user to change Luks passphrase and default user passwords
+  ansible.builtin.debug:
+    msg: "DO NOT FORGET TO CHANGE LUKS DEFAULT PASSPHRASE, ALL DEFAULT USER PASSWORDS AND ADD A GRUB PASSWORD"
+
+- name: Ask user to change Luks passphrase and default user passwords
+  ansible.builtin.debug:
+    msg: "DO NOT FORGET TO REBOOT"

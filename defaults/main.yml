@@ -1,0 +1,22 @@
+---
+
+# Is the system a routeur
+anssi_debian_hardenings_is_router: false
+
+# Is the system boot with UEFI
+anssi_debian_hardenings_uefi: false
+
+# Does the system need docker
+anssi_debian_hardenings_docker_modules: false
+
+# Install auto upgrade
+anssi_debian_hardenings_auto_upgrade_enabled: true
+
+# Disable kernel modules loading
+anssi_debian_hardenings_kernel_module_loading: false
+
+# Auditd parameters
+anssi_debian_hardenings_auditd_buffer_size: 64
+anssi_debian_hardenings_auditd_kernel_panic: false
+
+anssi_debian_hardenings_var_partition_noexec: true
