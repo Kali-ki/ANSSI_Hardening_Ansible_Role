@@ -30,7 +30,7 @@ The system has be partionned like:
 - /var/log
 - /var/tmp
 
-A compitable preseed is available with the role [debian_preseed](../../deployments/debian_preseed/README.md) by setting `debian_preseed_anssi_template` variable to `true`.
+[A compitable preseed is available](debian_preseed_anssi.cfg).
 
 Role Variables
 --------------
